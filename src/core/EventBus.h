@@ -21,6 +21,8 @@ enum class Ev : uint8_t {
   WIFI_UP,
   WIFI_DOWN,
   ANIMATION_FINISHED,  // data1 = id animation
+  ANIMATION_RUN,       // data1 = id animation (commande : démarrer)
+  ANIMATION_STOP,      // data1 = id animation (255 = toutes)
   SEQUENCE_RUN,        // data1 = id séquence
   TAG_CHANGED,         // tag fourni via 'name'
   HEARTBEAT,

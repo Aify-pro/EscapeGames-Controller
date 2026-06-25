@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <vector>
 #include "core/EventBus.h"
+#include "core/CatalogLock.h"
 #include "core/AutomationEngine.h"   // réutilise ActionKind (TOGGLE/ON/OFF/PULSE)
 #include "io/RelayManager.h"
 #include "Config.h"
@@ -57,6 +58,7 @@ private:
   std::vector<Sequence> _seqs;
 
   void run(uint8_t i) {
+    CatalogLock lk;   // _seqs peut être reconstruit par un reload à chaud
     if (i >= _seqs.size()) return;
     const Sequence& s = _seqs[i];
     if (!s.enabled) return;

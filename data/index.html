@@ -71,6 +71,61 @@
   .scene:focus-visible{outline:2px solid var(--on); outline-offset:2px}
   .scene.disabled{opacity:.4; pointer-events:none}
 
+  /* ---- Animations ---- */
+  .grid-anim{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+  .anim{
+    display:flex; align-items:center; gap:9px;
+    background:var(--panel); color:var(--ink);
+    border:1px solid var(--line); border-left:3px solid var(--momentary);
+    border-radius:var(--radius); padding:12px 18px; font-weight:700; font-size:14px;
+    letter-spacing:.03em; transition:transform .08s, border-color .15s, box-shadow .15s;
+  }
+  .anim .ad{width:9px; height:9px; border-radius:50%; background:var(--off); flex:none}
+  .anim:hover{border-color:var(--momentary)}
+  .anim:active{transform:translateY(1px)}
+  .anim.running{box-shadow:0 0 14px rgba(227,160,8,.18); border-color:var(--momentary)}
+  .anim.running .ad{background:var(--momentary); box-shadow:0 0 9px var(--momentary); animation:beat 1.2s ease-in-out infinite}
+  .anim.disabled{opacity:.4; pointer-events:none}
+  .anim-stop{background:var(--panel); color:var(--muted); border:1px solid var(--line);
+    border-radius:8px; padding:11px 14px; font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase}
+  .anim-stop:hover{border-color:var(--alert); color:var(--alert)}
+
+  /* ---- Drawer de configuration ---- */
+  .cfg-overlay{position:fixed; inset:0; background:rgba(4,7,11,.72); backdrop-filter:blur(2px);
+    display:none; z-index:50; padding:18px}
+  .cfg-overlay.show{display:flex; align-items:flex-start; justify-content:center}
+  .cfg-panel{background:var(--void); border:1px solid var(--line); border-radius:14px;
+    width:min(760px,100%); max-height:calc(100vh - 36px); display:flex; flex-direction:column; overflow:hidden}
+  .cfg-head{display:flex; align-items:center; gap:12px; padding:16px 18px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--panel),var(--panel-2))}
+  .cfg-head h2{margin:0; font-size:15px; letter-spacing:.1em; text-transform:uppercase; font-weight:800}
+  .cfg-head .spacer{flex:1}
+  .cfg-body{padding:8px 18px 18px; overflow:auto}
+  .cfg-msg{font:600 12px/1.4 var(--mono); color:var(--muted); padding:0 18px}
+  .cfg-msg.err{color:var(--alert)}
+  .cfg-msg.ok{color:var(--on)}
+  .btn.primary{background:var(--on-dim); border-color:var(--on); color:var(--ink)}
+  .btn.primary:hover{box-shadow:0 0 14px rgba(63,185,80,.2)}
+
+  .net-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px}
+  .fld{display:flex; flex-direction:column; gap:4px}
+  .fld label{font:600 9px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+  .cfg-note{font:500 11px/1.5 var(--mono); color:var(--muted); margin:6px 0 0}
+
+  input[type=text],input[type=number],select{
+    background:var(--panel-2); color:var(--ink); border:1px solid var(--line);
+    border-radius:7px; padding:8px 9px; font:600 12px/1 var(--mono); width:100%}
+  input:focus,select:focus{outline:none; border-color:var(--muted)}
+  input[type=checkbox]{width:17px; height:17px; accent-color:var(--on); cursor:pointer}
+
+  .cfg-row{display:grid; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--line)}
+  .cfg-row.relay{grid-template-columns:24px 30px 1fr 96px 30px 76px}
+  .cfg-row.input{grid-template-columns:24px 30px 1fr 70px 70px}
+  .cfg-row .ix{font:600 10px/1 var(--mono); color:var(--muted); text-align:center}
+  .cfg-row.head{border-bottom:1px solid var(--line); padding-bottom:6px}
+  .cfg-row.head span{font:600 9px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .cfg-row .dur.hidden{visibility:hidden}
+
   /* ---- Relay grid ---- */
   .grid-relays{display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(148px,1fr))}
   .tile{
@@ -126,11 +181,15 @@
     <div class="game">
       <div class="stat"><span class="k">Partie</span><span class="badge" id="gameBadge">arrêtée</span></div>
       <button class="btn" id="gameBtn">Démarrer</button>
+      <button class="btn" id="cfgBtn" title="Configuration">⚙ Config</button>
     </div>
   </div>
 
   <div class="eyebrow">Scènes</div>
   <div class="grid-seq" id="seqs"></div>
+
+  <div class="eyebrow">Animations</div>
+  <div class="grid-anim" id="anims"></div>
 
   <div class="eyebrow">Relais</div>
   <div class="grid-relays" id="relays"></div>
@@ -140,6 +199,43 @@
 
   <div class="eyebrow">Journal d'événements</div>
   <div class="log" id="log"></div>
+
+  <!-- ============ Drawer de configuration ============ -->
+  <div class="cfg-overlay" id="cfgOverlay">
+    <div class="cfg-panel">
+      <div class="cfg-head">
+        <h2>Configuration</h2>
+        <div class="spacer"></div>
+        <button class="btn" id="cfgCancel">Fermer</button>
+        <button class="btn primary" id="cfgSave">Enregistrer</button>
+      </div>
+      <div class="cfg-msg" id="cfgMsg"></div>
+      <div class="cfg-body">
+        <div class="eyebrow">Réseau</div>
+        <div class="net-grid">
+          <div class="fld"><label>IP</label><input type="text" id="net_ip"></div>
+          <div class="fld"><label>Passerelle</label><input type="text" id="net_gw"></div>
+          <div class="fld"><label>Masque</label><input type="text" id="net_mask"></div>
+          <div class="fld"><label>DNS</label><input type="text" id="net_dns"></div>
+          <div class="fld"><label>SSID secours</label><input type="text" id="net_ssid"></div>
+          <div class="fld"><label>Mot de passe</label><input type="text" id="net_pass"></div>
+        </div>
+        <p class="cfg-note">⚠ Les changements réseau ne s'appliquent qu'après redémarrage de la carte.</p>
+
+        <div class="eyebrow">Relais</div>
+        <div class="cfg-row relay head">
+          <span></span><span>#</span><span>Nom</span><span>Type</span><span>Init</span><span>Durée</span>
+        </div>
+        <div id="cfgRelays"></div>
+
+        <div class="eyebrow">Entrées</div>
+        <div class="cfg-row input head">
+          <span></span><span>#</span><span>Nom</span><span>Mode</span><span>Anti-reb.</span>
+        </div>
+        <div id="cfgInputs"></div>
+      </div>
+    </div>
+  </div>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -157,10 +253,11 @@ function setOffline(b){ $("#offline").classList.toggle("show",b); }
 
 function handle(m){
   switch(m.t){
-    case "snapshot": buildRelays(m.relays); buildInputs(m.inputs); buildSeqs(m.sequences);
+    case "snapshot": buildRelays(m.relays); buildInputs(m.inputs); buildSeqs(m.sequences); buildAnims(m.animations);
       $("#fw").textContent="fw "+m.fw; net(m.net); setGame(m.game); break;
     case "relay": setRelay(m.i,m.on); break;
     case "input": setInput(m.i,m.high); break;
+    case "anim":  setAnim(m.i,m.running); break;
     case "net":   net(m); break;
     case "game":  setGame(m.running); break;
     case "hb":    beat(); break;
@@ -198,6 +295,33 @@ function buildSeqs(list){
     };
     g.appendChild(b);
   });
+}
+
+/* ---- animations ---- */
+const animRunning={};
+function buildAnims(list){
+  const g=$("#anims"); g.innerHTML="";
+  (list||[]).forEach(a=>{
+    const b=document.createElement("button");
+    b.className="anim"+(a.en?"":" disabled")+(animRunning[a.i]?" running":"");
+    b.id="a"+a.i; b.dataset.loop=a.loop?1:0;
+    b.innerHTML=`<span class="ad"></span>${esc(a.name)}`;
+    b.onclick=()=>{
+      if(animRunning[a.i]) send({cmd:"animstop",i:a.i});
+      else { send({cmd:"anim",i:a.i}); setAnim(a.i,true); } // optimiste, corrigé par animdone
+    };
+    g.appendChild(b);
+  });
+  if((list||[]).length){
+    const stop=document.createElement("button");
+    stop.className="anim-stop"; stop.textContent="■ Tout stopper";
+    stop.onclick=()=>send({cmd:"animstopall"});
+    g.appendChild(stop);
+  }
+}
+function setAnim(i,running){
+  animRunning[i]=running;
+  const b=$("#a"+i); if(!b) return; b.classList.toggle("running",running);
 }
 
 /* ---- inputs ---- */
@@ -245,6 +369,82 @@ function logLine(msg){
   while(l.childElementCount>60) l.removeChild(l.lastChild);
 }
 function esc(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+/* ============ Configuration ============ */
+let cfgData=null;
+const RTYPE=[["0","on/off"],["1","impulsion"],["2","fail-safe"]];
+const IMODE=[["0","NO"],["1","NC"]];
+
+function mkSel(opts,val,onch){
+  const s=document.createElement("select");
+  opts.forEach(([v,t])=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; s.appendChild(o); });
+  s.value=String(val); s.onchange=()=>onch(parseInt(s.value,10)); return s;
+}
+function mkInput(type,val,onch){
+  const i=document.createElement("input"); i.type=type; i.value=val;
+  i.oninput=()=>onch(type==="number"?parseInt(i.value||"0",10):i.value); return i;
+}
+function mkChk(val,onch){
+  const i=document.createElement("input"); i.type="checkbox"; i.checked=!!val;
+  i.onchange=()=>onch(i.checked); return i;
+}
+
+function cfgMsg(t,cls){ const m=$("#cfgMsg"); m.textContent=t||""; m.className="cfg-msg"+(cls?" "+cls:""); }
+
+async function openCfg(){
+  cfgMsg("Chargement…");
+  try{
+    const r=await fetch("/api/config",{cache:"no-store"});
+    cfgData=await r.json();
+    renderCfg(); cfgMsg("");
+    $("#cfgOverlay").classList.add("show");
+  }catch(e){ cfgMsg("Impossible de lire la config",  "err"); }
+}
+function closeCfg(){ $("#cfgOverlay").classList.remove("show"); }
+
+function renderCfg(){
+  ["ip","gw","mask","dns","ssid","pass"].forEach(k=>{ $("#net_"+k).value=(cfgData.net&&cfgData.net[k])||""; });
+
+  const rg=$("#cfgRelays"); rg.innerHTML="";
+  (cfgData.relays||[]).forEach((r,idx)=>{
+    const row=document.createElement("div"); row.className="cfg-row relay";
+    const en=mkChk(r.enabled,v=>r.enabled=v);
+    const ix=document.createElement("div"); ix.className="ix"; ix.textContent="R"+String(idx+1).padStart(2,"0");
+    const nm=mkInput("text",r.name||"",v=>r.name=v);
+    const dur=mkInput("number",r.duration||0,v=>r.duration=v); dur.classList.add("dur");
+    const ty=mkSel(RTYPE,r.type||0,v=>{ r.type=v; dur.classList.toggle("hidden",v!==1); });
+    dur.classList.toggle("hidden",(r.type||0)!==1);
+    const def=mkChk(r.default_state,v=>r.default_state=v);
+    row.append(en,ix,nm,ty,def,dur); rg.appendChild(row);
+  });
+
+  const ig=$("#cfgInputs"); ig.innerHTML="";
+  (cfgData.inputs||[]).forEach((s,idx)=>{
+    const row=document.createElement("div"); row.className="cfg-row input";
+    const en=mkChk(s.enabled,v=>s.enabled=v);
+    const ix=document.createElement("div"); ix.className="ix"; ix.textContent="E"+String(idx+1).padStart(2,"0");
+    const nm=mkInput("text",s.name||"",v=>s.name=v);
+    const mo=mkSel(IMODE,s.mode||0,v=>s.mode=v);
+    const db=mkInput("number",s.debounce||50,v=>s.debounce=v);
+    row.append(en,ix,nm,mo,db); ig.appendChild(row);
+  });
+}
+
+async function saveCfg(){
+  ["ip","gw","mask","dns","ssid","pass"].forEach(k=>{ cfgData.net[k]=$("#net_"+k).value; });
+  cfgMsg("Enregistrement…");
+  try{
+    const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfgData)});
+    const j=await r.json();
+    if(j.ok){ cfgMsg("Enregistré ✓","ok"); setTimeout(closeCfg,600); }
+    else cfgMsg("Échec de l'enregistrement","err");
+  }catch(e){ cfgMsg("Erreur réseau","err"); }
+}
+
+$("#cfgBtn").onclick=openCfg;
+$("#cfgCancel").onclick=closeCfg;
+$("#cfgSave").onclick=saveCfg;
+$("#cfgOverlay").onclick=e=>{ if(e.target===$("#cfgOverlay")) closeCfg(); };
 
 connect();
 </script>

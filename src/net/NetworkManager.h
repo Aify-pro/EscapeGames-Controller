@@ -14,10 +14,10 @@
 // ============================================================
 
 struct NetCfg {
-  IPAddress ip{192,168,1,50};
-  IPAddress gw{192,168,1,1};
+  IPAddress ip{192,168,3,50};
+  IPAddress gw{192,168,3,1};
   IPAddress mask{255,255,255,0};
-  IPAddress dns{192,168,1,1};
+  IPAddress dns{192,168,3,1};
   char ssid[33] = "";
   char pass[65] = "";
 };

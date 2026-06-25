@@ -5,6 +5,7 @@
 #include "core/StateManager.h"
 #include "core/AutomationEngine.h"
 #include "core/SequenceEngine.h"
+#include "core/AnimationEngine.h"
 #include "net/NetworkManager.h"
 #include "io/RelayManager.h"
 #include "io/InputManager.h"
@@ -12,14 +13,17 @@
 #include "storage/ConfigStore.h"
 // ============================================================
 //  Escape Game Central Controller — main
-//  ÉTAPES 1-6 : coeur événementiel + relais + inputs + réseau
-//               + config + web temps réel + scènes + OTA-ready
+//  ÉTAPES 1-7 : coeur événementiel + relais + inputs + réseau
+//               + config + web temps réel + scènes + animations
+//               + menu de config web + OTA-ready
 //  HW : MCP23017 (I2C 33/32, adresses 0x27/0x26/0x25).
 //
 //  Console série de test (115200 baud) :
 //    r<n>      -> toggle relais n   (ex: r5)
 //    p<n>      -> impulsion relais n
 //    q<n>      -> déclenche la scène n (ex: q1 = 1ère séquence)
+//    a<n>      -> déclenche l'animation n
+//    x         -> stoppe toutes les animations
 //    s         -> dump états
 //    save      -> sauvegarde config
 // ============================================================
@@ -69,6 +73,11 @@ static void consoleTask(void*) {
         } else if (line.startsWith("q")) {
           int n = line.substring(1).toInt() - 1;   // 1-based comme r/p
           Seq().trigger(n);
+        } else if (line == "x") {
+          Anim().stopAll();
+        } else if (line.startsWith("a")) {
+          int n = line.substring(1).toInt() - 1;   // 1-based
+          Anim().trigger(n);
         } else if (line == "s") {
           for (uint8_t i = 0; i < RELAY_COUNT; i++)
             if (State().relay(i)) Serial.printf("  R%d ON (%s)\n", i + 1, Relays().cfg(i).name);
@@ -100,8 +109,9 @@ void setup() {
   Relays().begin();       // 5. MCP23017 sorties (0x27/0x26) + états sûrs au boot
   Autos().begin();        // 6. moteur event->action (s'abonne au bus)
   Seq().begin();          // 7. moteur de scènes (écoute SEQUENCE_RUN)
-  Inputs().begin();       // 8. lecture des 16 entrées (MCP23017 0x25)
-  Web().begin();          // 9. serveur web + WebSocket temps réel
+  Anim().begin();         // 8. moteur d'animations/timelines (tâche dédiée)
+  Inputs().begin();       // 9. lecture des 16 entrées (MCP23017 0x25)
+  Web().begin();          // 10. serveur web + WebSocket + API config
 
   xTaskCreatePinnedToCore(heartbeatTask, "hb",   3072, nullptr, 2, nullptr, 1);
   xTaskCreatePinnedToCore(consoleTask,   "cons", 3072, nullptr, 2, nullptr, 1);

@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <vector>
 #include "core/EventBus.h"
+#include "core/CatalogLock.h"
 #include "io/RelayManager.h"
 // ============================================================
 //  AutomationEngine — la brique EVENT -> ACTION du brief.
@@ -38,6 +39,7 @@ private:
   std::vector<Automation> _rules;
 
   void onInput(uint8_t input) {
+    CatalogLock lk;   // _rules peut être reconstruit par un reload à chaud
     for (auto& r : _rules) {
       if (r.inputIndex != input) continue;
       switch (r.action) {

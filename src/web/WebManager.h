@@ -5,11 +5,14 @@
 #include <ETH.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
+#include <AsyncJson.h>
 #include "core/EventBus.h"
 #include "core/StateManager.h"
 #include "io/RelayManager.h"
 #include "io/InputManager.h"
 #include "core/SequenceEngine.h"
+#include "core/AnimationEngine.h"
+#include "storage/ConfigStore.h"
 #include "Config.h"
 // ============================================================
 //  WebManager — ÉTAPES 4 & 5.
@@ -36,6 +39,26 @@ public:
       if (LittleFS.exists("/index.html")) r->send(LittleFS, "/index.html", "text/html");
       else r->send(200, "text/html", fsDiag());
     });
+
+    // --- API config (menu de configuration du dashboard) ---
+    // GET : renvoie la config COMPLÈTE live (32 relais, 16 entrées, scènes, anims, réseau).
+    _server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest* r){
+      r->send(200, "application/json", Cfg().exportJson());
+    });
+    // POST : reçoit la config complète, persiste sur LittleFS, recharge à chaud, diffuse.
+    auto* cfgPost = new AsyncCallbackJsonWebHandler("/api/config",
+      [this](AsyncWebServerRequest* req, JsonVariant& json){
+        File f = LittleFS.open("/config.json", "w");
+        if (!f) { req->send(500, "application/json", "{\"ok\":false}"); return; }
+        serializeJsonPretty(json, f);
+        f.close();
+        Cfg().load();             // ré-applique noms/types/enabled/modes/scènes/anims à chaud
+        broadcastSnapshot();      // tous les dashboards se resynchronisent
+        Bus().publish(Ev::LOG, 0, 0, "Config mise a jour");
+        req->send(200, "application/json", "{\"ok\":true}");
+      });
+    _server.addHandler(cfgPost);
+
     _server.serveStatic("/", LittleFS, "/");   // autres assets éventuels
     _server.onNotFound([](AsyncWebServerRequest* r){ r->send(404, "text/plain", "404"); });
     _server.begin();
@@ -89,6 +112,8 @@ private:
         case Ev::ETH_UP: case Ev::ETH_DOWN:
         case Ev::WIFI_UP: case Ev::WIFI_DOWN: pushNet(); break;
         case Ev::GAME_STARTED: case Ev::GAME_STOPPED: pushGame(); break;
+        case Ev::ANIMATION_RUN:      pushAnim(e.data1, true);  break;
+        case Ev::ANIMATION_FINISHED: pushAnim(e.data1, false); break;
         case Ev::HEARTBEAT: { JsonDocument h; h["t"] = "hb"; send(h); } break;
         case Ev::LOG: pushLog(e.name); break;
         default: break;
@@ -113,6 +138,10 @@ private:
     JsonDocument d; d["t"] = "game"; d["running"] = State().gameRunning();
     send(d);
   }
+  void pushAnim(int i, bool running) {
+    JsonDocument d; d["t"] = "anim"; d["i"] = i; d["running"] = running;
+    send(d);
+  }
   void pushLog(const char* msg) {
     JsonDocument d; d["t"] = "log"; d["msg"] = msg;
     send(d);
@@ -121,8 +150,8 @@ private:
     String s; serializeJson(d, s); _ws.textAll(s);
   }
 
-  // ---------- Snapshot complet pour un client qui se connecte ----------
-  void sendSnapshot(AsyncWebSocketClient* c) {
+  // ---------- Snapshot complet ----------
+  String snapshotJson() {
     JsonDocument d;
     d["t"] = "snapshot";
     d["fw"] = FW_VERSION;
@@ -149,8 +178,17 @@ private:
       JsonObject o = seqs.add<JsonObject>();
       o["i"] = i; o["name"] = s.name; o["en"] = s.enabled;
     }
-    String s; serializeJson(d, s); c->text(s);
+    JsonArray anims = d["animations"].to<JsonArray>();
+    for (uint8_t i = 0; i < Anim().count(); i++) {
+      const auto& a = Anim().list()[i];
+      JsonObject o = anims.add<JsonObject>();
+      o["i"] = i; o["name"] = a.name; o["en"] = a.enabled; o["loop"] = a.loop;
+    }
+    String s; serializeJson(d, s); return s;
   }
+
+  void sendSnapshot(AsyncWebSocketClient* c) { c->text(snapshotJson()); }
+  void broadcastSnapshot() { _ws.textAll(snapshotJson()); }
 
   // ---------- Commandes entrantes (client -> serveur) ----------
   void onWs(AsyncWebSocketClient* c, AwsEventType t, void* arg, uint8_t* data, size_t len) {
@@ -173,6 +211,9 @@ private:
     else if (!strcmp(cmd, "relay")  && i >= 0) Relays().command(i, d["on"] | false);
     else if (!strcmp(cmd, "pulse")  && i >= 0) { Relays().cfg(i).type = RelayType::MOMENTARY; Relays().command(i, true); }
     else if (!strcmp(cmd, "seq")    && i >= 0) Seq().trigger(i);
+    else if (!strcmp(cmd, "anim")   && i >= 0) Anim().trigger(i);
+    else if (!strcmp(cmd, "animstop") && i >= 0) Anim().stop(i);
+    else if (!strcmp(cmd, "animstopall"))      Anim().stopAll();
     else if (!strcmp(cmd, "game"))             State().setGameRunning(d["running"] | false);
     else if (!strcmp(cmd, "snapshot"))         sendSnapshot(c);
   }

@@ -9,7 +9,7 @@ l'automation décide, le `RelayManager` exécute.
 > I²C sur **GPIO33/32**, adresses **0x27/0x26/0x25**. L'ancien driver PCF8575 maison
 > est retiré. Cf. `2_CONTEXTE_TECHNIQUE.md` (connaissances projet).
 
-## État actuel — ÉTAPES 1 → 6
+## État actuel — ÉTAPES 1 → 7
 
 ```
 CORE
@@ -23,7 +23,8 @@ CORE
 ├── WebManager       ✅  serveur + WebSocket temps réel                 [Étape 4]
 ├── Dashboard web    ✅  data/index.html, relais + inputs + scènes live  [Étape 5]
 ├── SequenceEngine   ✅  scènes instantanées multi-relais             [Étape 6]
-├── AnimationEngine  ⬜  Étape 7
+├── AnimationEngine  ✅  timelines temporisées non bloquantes         [Étape 7]
+├── Menu config web  ✅  éditeur relais/entrées/réseau (/api/config)
 ├── OLED UI          ⬜  Étape 8
 ├── HoudiniConnector ⬜  Étape 9
 └── OTA + Watchdog   ⬜  Étape 10 (partitions déjà prêtes ✅)
@@ -68,10 +69,13 @@ pio device monitor      # console série 115200 (optionnel)
 ## Protocole WebSocket (/ws)
 
 Client → serveur : `{"cmd":"toggle","i":4}` · `{"cmd":"relay","i":4,"on":true}` ·
-`{"cmd":"pulse","i":2}` · `{"cmd":"seq","i":0}` · `{"cmd":"game","running":true}` · `{"cmd":"snapshot"}`
+`{"cmd":"pulse","i":2}` · `{"cmd":"seq","i":0}` · `{"cmd":"anim","i":0}` · `{"cmd":"animstop","i":0}` · `{"cmd":"animstopall"}` · `{"cmd":"game","running":true}` · `{"cmd":"snapshot"}`
 
 Serveur → client : `snapshot` (état complet, dont la liste des scènes) puis les deltas
-`relay` / `input` / `net` / `game` / `hb` / `log`.
+`relay` / `input` / `anim` / `net` / `game` / `hb` / `log`.
+
+**API HTTP config** : `GET /api/config` (config complète live) · `POST /api/config`
+(reçoit la config complète JSON, persiste sur LittleFS, recharge à chaud, rediffuse le snapshot).
 
 ## Scènes (Étape 6)
 
@@ -88,7 +92,33 @@ dashboard (boutons « Scènes »), console série (`q<n>`), et à venir le joyst
 `action` : 0=TOGGLE, 1=ON, 2=OFF, 3=PULSE. Tous les pas sont appliqués d'un bloc,
 via le `RelayManager` (jamais de pilotage direct). Les timelines temporisées = Étape 7.
 
+## Animations (Étape 7)
+
+Une animation = une **timeline non bloquante** : des pas relais horodatés (`at` en ms).
+`loop`+`period` pour boucler (clignotement). Déclenchées via le bus (`ANIMATION_RUN` /
+`ANIMATION_STOP`) : dashboard (section « Animations », bouton bascule + « Tout stopper »),
+console (`a<n>` / `x`). Une tâche FreeRTOS dédiée fait avancer les curseurs — jamais de `delay()`.
+
+```json
+"animations": [
+  { "id":1, "name":"Clignotement", "enabled":true, "loop":true, "period":1000,
+    "steps":[ {"at":0,"relay":0,"action":1}, {"at":500,"relay":0,"action":2} ] }
+]
+```
+
+> Scène (Étape 6) = instantané ; Animation (Étape 7) = échelonné dans le temps.
+
+## Menu de configuration (web)
+
+Bouton **⚙ Config** du dashboard → éditeur **Réseau / Relais / Entrées** :
+activer/désactiver, renommer, type relais, état initial, durée d'impulsion, mode NO/NC,
+anti-rebond. « Enregistrer » persiste sur LittleFS (`/api/config`) et applique **à chaud**
+(sauf réseau : redémarrage requis). Plus besoin de `uploadfs` pour reconfigurer une salle.
+
+> Édition des **scènes/animations** : encore via `config.json` pour l'instant
+> (éditeur dédié = prochain incrément si besoin).
+
 ## Prochaine étape
 
-**Étape 7 : AnimationEngine** — timelines NON bloquantes (pas échelonnés dans le temps,
-ex. clignotements, ouvertures séquencées) au-dessus du même bus.
+**Étape 8 : OLED SSD1306 + joystick HW-504** — UI locale de maintenance
+(état réseau, relais, déclenchement scènes/anims sans navigateur).

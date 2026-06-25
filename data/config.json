@@ -1,11 +1,11 @@
 {
   "config_version": 1,
-  "fw_version": "0.6.0",
+  "fw_version": "0.7.0",
   "net": {
-    "ip": "192.168.1.50",
-    "gw": "192.168.1.1",
+    "ip": "192.168.3.50",
+    "gw": "192.168.3.1",
     "mask": "255.255.255.0",
-    "dns": "192.168.1.1",
+    "dns": "192.168.3.1",
     "ssid": "",
     "pass": ""
   },
@@ -37,11 +37,22 @@
         { "relay": 0, "action": 1 }
     ]}
   ],
+  "animations": [
+    { "id": 1, "name": "Clignotement", "enabled": true, "loop": true, "period": 1000, "steps": [
+        { "at": 0,   "relay": 0, "action": 1 },
+        { "at": 500, "relay": 0, "action": 2 }
+    ]},
+    { "id": 2, "name": "Ouverture seq", "enabled": true, "loop": false, "period": 1500, "steps": [
+        { "at": 0,    "relay": 2, "action": 2 },
+        { "at": 800,  "relay": 1, "action": 3 }
+    ]}
+  ],
   "_notes": {
     "relay_type": "0=ONOFF, 1=MOMENTARY, 2=FAILSAFE",
     "input_mode": "0=NO (actif au contact), 1=NC (actif a l'ouverture)",
     "action": "0=TOGGLE, 1=ON, 2=OFF, 3=PULSE",
-    "sequence": "scene instantanee : applique chaque step (relay+action) d'un bloc",
-    "exemple": "Reset: coupe relais 0/1, active maglock 2 ; Ouverture: coupe maglock, pulse gache"
+    "sequence": "scene INSTANTANEE : tous les steps appliques d'un bloc",
+    "animation": "timeline TEMPORISEE : steps horodates (at en ms), loop+period pour boucler",
+    "automations_vs_animations": "automations = input->relais ; animations = timelines relais"
   }
 }

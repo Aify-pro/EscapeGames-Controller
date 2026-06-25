@@ -7,6 +7,8 @@
 #include "io/InputManager.h"
 #include "core/AutomationEngine.h"
 #include "core/SequenceEngine.h"
+#include "core/AnimationEngine.h"
+#include "core/CatalogLock.h"
 #include "Config.h"
 // ============================================================
 //  ConfigStore — persistance JSON sur LittleFS.
@@ -80,29 +82,53 @@ public:
       i++;
     }
 
-    // --- automations (input -> action relais) ---
-    Autos().clear();
-    for (JsonObject a : doc["automations"].as<JsonArray>()) {
-      Automation au;
-      au.inputIndex = a["input"] | 0;
-      au.action     = (ActionKind)(a["action"] | 0);
-      au.relayIndex = a["relay"] | 0;
-      Autos().add(au);
-    }
+    // --- catalogues dynamiques : verrou pour un reload À CHAUD sûr ---
+    // (lecteurs concurrents : tâche anim + dispatch bus pour autos/scènes)
+    {
+      CatalogLock lk;
 
-    // --- séquences / scènes multi-relais (Étape 6) ---
-    Seq().clear();
-    for (JsonObject s : doc["sequences"].as<JsonArray>()) {
-      Sequence seq;
-      strlcpy(seq.name, s["name"] | "Sequence", sizeof(seq.name));
-      seq.enabled = s["enabled"] | true;
-      for (JsonObject st : s["steps"].as<JsonArray>()) {
-        SeqStep step;
-        step.relayIndex = st["relay"]  | 0;
-        step.action     = (ActionKind)(st["action"] | 0);
-        seq.steps.push_back(step);
+      // automations (input -> action relais)
+      Autos().clear();
+      for (JsonObject a : doc["automations"].as<JsonArray>()) {
+        Automation au;
+        au.inputIndex = a["input"] | 0;
+        au.action     = (ActionKind)(a["action"] | 0);
+        au.relayIndex = a["relay"] | 0;
+        Autos().add(au);
       }
-      Seq().add(seq);
+
+      // séquences / scènes multi-relais (Étape 6)
+      Seq().clear();
+      for (JsonObject s : doc["sequences"].as<JsonArray>()) {
+        Sequence seq;
+        strlcpy(seq.name, s["name"] | "Sequence", sizeof(seq.name));
+        seq.enabled = s["enabled"] | true;
+        for (JsonObject st : s["steps"].as<JsonArray>()) {
+          SeqStep step;
+          step.relayIndex = st["relay"]  | 0;
+          step.action     = (ActionKind)(st["action"] | 0);
+          seq.steps.push_back(step);
+        }
+        Seq().add(seq);
+      }
+
+      // animations / timelines temporisées (Étape 7)
+      Anim().clear();
+      for (JsonObject an : doc["animations"].as<JsonArray>()) {
+        Animation a;
+        strlcpy(a.name, an["name"] | "Animation", sizeof(a.name));
+        a.enabled  = an["enabled"] | true;
+        a.loop     = an["loop"]    | false;
+        a.periodMs = an["period"]  | 1000;
+        for (JsonObject st : an["steps"].as<JsonArray>()) {
+          AnimStep step;
+          step.atMs       = st["at"]    | 0;
+          step.relayIndex = st["relay"] | 0;
+          step.action     = (ActionKind)(st["action"] | 0);
+          a.steps.push_back(step);
+        }
+        Anim().add(a);
+      }
     }
     Serial.printf("[cfg] loaded (v%d)\n", v);
     return true;
@@ -110,6 +136,28 @@ public:
 
   bool save() {
     JsonDocument doc;
+    buildDoc(doc);
+    File f = LittleFS.open(CONFIG_PATH, "w");
+    if (!f) return false;
+    serializeJsonPretty(doc, f);
+    f.close();
+    Serial.println("[cfg] saved");
+    return true;
+  }
+
+  // Sérialise la config COMPLÈTE live (32 relais, 16 entrées, scènes,
+  // animations, réseau) en String -> servie par l'API GET /api/config.
+  String exportJson() {
+    JsonDocument doc;
+    buildDoc(doc);
+    String s;
+    serializeJsonPretty(doc, s);
+    return s;
+  }
+
+private:
+  // Remplit 'doc' à partir de l'état live (source unique de save/export).
+  void buildDoc(JsonDocument& doc) {
     doc["config_version"] = CONFIG_VERSION;
     doc["fw_version"]     = FW_VERSION;
 
@@ -168,15 +216,26 @@ public:
       si++;
     }
 
-    File f = LittleFS.open(CONFIG_PATH, "w");
-    if (!f) return false;
-    serializeJsonPretty(doc, f);
-    f.close();
-    Serial.println("[cfg] saved");
-    return true;
+    JsonArray anims = doc["animations"].to<JsonArray>();
+    uint8_t ai = 0;
+    for (auto& a : Anim().list()) {
+      JsonObject o = anims.add<JsonObject>();
+      o["id"]      = ai + 1;
+      o["name"]    = a.name;
+      o["enabled"] = a.enabled;
+      o["loop"]    = a.loop;
+      o["period"]  = a.periodMs;
+      JsonArray steps = o["steps"].to<JsonArray>();
+      for (auto& st : a.steps) {
+        JsonObject so = steps.add<JsonObject>();
+        so["at"]     = st.atMs;
+        so["relay"]  = st.relayIndex;
+        so["action"] = (int)st.action;
+      }
+      ai++;
+    }
   }
 
-private:
   ConfigStore() = default;
 
   // Place pour les futures migrations de schéma (v1->v2...).
