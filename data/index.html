@@ -57,6 +57,20 @@
   .btn:hover{border-color:var(--muted)}
   .btn:focus-visible{outline:2px solid var(--on); outline-offset:2px}
 
+  /* ---- Scenes / sequences ---- */
+  .grid-seq{display:flex; flex-wrap:wrap; gap:10px}
+  .scene{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2)); color:var(--ink);
+    border:1px solid var(--line); border-left:3px solid var(--failsafe);
+    border-radius:var(--radius); padding:12px 20px; font-weight:700; font-size:14px;
+    letter-spacing:.03em; transition:transform .08s, border-color .15s, box-shadow .15s;
+  }
+  .scene:hover{border-color:var(--failsafe); box-shadow:0 0 14px rgba(59,130,246,.14)}
+  .scene:active{transform:translateY(1px)}
+  .scene.flash{box-shadow:0 0 0 2px var(--failsafe) inset}
+  .scene:focus-visible{outline:2px solid var(--on); outline-offset:2px}
+  .scene.disabled{opacity:.4; pointer-events:none}
+
   /* ---- Relay grid ---- */
   .grid-relays{display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(148px,1fr))}
   .tile{
@@ -115,6 +129,9 @@
     </div>
   </div>
 
+  <div class="eyebrow">Scènes</div>
+  <div class="grid-seq" id="seqs"></div>
+
   <div class="eyebrow">Relais</div>
   <div class="grid-relays" id="relays"></div>
 
@@ -140,7 +157,7 @@ function setOffline(b){ $("#offline").classList.toggle("show",b); }
 
 function handle(m){
   switch(m.t){
-    case "snapshot": buildRelays(m.relays); buildInputs(m.inputs);
+    case "snapshot": buildRelays(m.relays); buildInputs(m.inputs); buildSeqs(m.sequences);
       $("#fw").textContent="fw "+m.fw; net(m.net); setGame(m.game); break;
     case "relay": setRelay(m.i,m.on); break;
     case "input": setInput(m.i,m.high); break;
@@ -166,6 +183,21 @@ function buildRelays(list){
 function setRelay(i,on){
   const t=$("#r"+i); if(!t) return;
   t.classList.toggle("on",on); t.querySelector(".st").textContent=on?"on":"off";
+}
+
+/* ---- scenes ---- */
+function buildSeqs(list){
+  const g=$("#seqs"); g.innerHTML="";
+  (list||[]).forEach(s=>{
+    const b=document.createElement("button");
+    b.className="scene"+(s.en?"":" disabled");
+    b.textContent=s.name;
+    b.onclick=()=>{
+      send({cmd:"seq",i:s.i});
+      b.classList.add("flash"); setTimeout(()=>b.classList.remove("flash"),180);
+    };
+    g.appendChild(b);
+  });
 }
 
 /* ---- inputs ---- */
