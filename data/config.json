@@ -1,6 +1,6 @@
 {
   "config_version": 1,
-  "fw_version": "0.5.1",
+  "fw_version": "0.6.0",
   "net": {
     "ip": "192.168.1.50",
     "gw": "192.168.1.1",
@@ -23,10 +23,25 @@
     { "input": 0, "action": 1, "relay": 0 },
     { "input": 1, "action": 3, "relay": 1 }
   ],
+  "sequences": [
+    { "id": 1, "name": "Reset", "enabled": true, "steps": [
+        { "relay": 0, "action": 2 },
+        { "relay": 1, "action": 2 },
+        { "relay": 2, "action": 1 }
+    ]},
+    { "id": 2, "name": "Ouverture", "enabled": true, "steps": [
+        { "relay": 2, "action": 2 },
+        { "relay": 1, "action": 3 }
+    ]},
+    { "id": 3, "name": "Nettoyage", "enabled": true, "steps": [
+        { "relay": 0, "action": 1 }
+    ]}
+  ],
   "_notes": {
     "relay_type": "0=ONOFF, 1=MOMENTARY, 2=FAILSAFE",
     "input_mode": "0=NO (actif au contact), 1=NC (actif a l'ouverture)",
     "action": "0=TOGGLE, 1=ON, 2=OFF, 3=PULSE",
-    "exemple": "input 0 (Bouton Start) -> allume relais 0 ; input 1 (Coffre) -> impulsion relais 1"
+    "sequence": "scene instantanee : applique chaque step (relay+action) d'un bloc",
+    "exemple": "Reset: coupe relais 0/1, active maglock 2 ; Ouverture: coupe maglock, pulse gache"
   }
 }

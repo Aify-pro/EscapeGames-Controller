@@ -9,6 +9,7 @@
 #include "core/StateManager.h"
 #include "io/RelayManager.h"
 #include "io/InputManager.h"
+#include "core/SequenceEngine.h"
 #include "Config.h"
 // ============================================================
 //  WebManager — ÉTAPES 4 & 5.
@@ -142,6 +143,12 @@ private:
       JsonObject o = inputs.add<JsonObject>();
       o["i"] = i; o["name"] = ic.name; o["high"] = State().input(i); o["en"] = ic.enabled;
     }
+    JsonArray seqs = d["sequences"].to<JsonArray>();
+    for (uint8_t i = 0; i < Seq().count(); i++) {
+      const auto& s = Seq().list()[i];
+      JsonObject o = seqs.add<JsonObject>();
+      o["i"] = i; o["name"] = s.name; o["en"] = s.enabled;
+    }
     String s; serializeJson(d, s); c->text(s);
   }
 
@@ -165,6 +172,7 @@ private:
     if      (!strcmp(cmd, "toggle") && i >= 0) Relays().toggle(i);
     else if (!strcmp(cmd, "relay")  && i >= 0) Relays().command(i, d["on"] | false);
     else if (!strcmp(cmd, "pulse")  && i >= 0) { Relays().cfg(i).type = RelayType::MOMENTARY; Relays().command(i, true); }
+    else if (!strcmp(cmd, "seq")    && i >= 0) Seq().trigger(i);
     else if (!strcmp(cmd, "game"))             State().setGameRunning(d["running"] | false);
     else if (!strcmp(cmd, "snapshot"))         sendSnapshot(c);
   }

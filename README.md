@@ -9,7 +9,7 @@ l'automation décide, le `RelayManager` exécute.
 > I²C sur **GPIO33/32**, adresses **0x27/0x26/0x25**. L'ancien driver PCF8575 maison
 > est retiré. Cf. `2_CONTEXTE_TECHNIQUE.md` (connaissances projet).
 
-## État actuel — ÉTAPES 1 → 5
+## État actuel — ÉTAPES 1 → 6
 
 ```
 CORE
@@ -21,8 +21,8 @@ CORE
 ├── NetworkManager   ✅  Ethernet prioritaire / WiFi secours
 ├── ConfigStore      ✅  LittleFS + JSON + config_version
 ├── WebManager       ✅  serveur + WebSocket temps réel                 [Étape 4]
-├── Dashboard web    ✅  data/index.html, tuiles relais + inputs live   [Étape 5]
-├── SequenceEngine   ⬜  Étape 6
+├── Dashboard web    ✅  data/index.html, relais + inputs + scènes live  [Étape 5]
+├── SequenceEngine   ✅  scènes instantanées multi-relais             [Étape 6]
 ├── AnimationEngine  ⬜  Étape 7
 ├── OLED UI          ⬜  Étape 8
 ├── HoudiniConnector ⬜  Étape 9
@@ -68,12 +68,27 @@ pio device monitor      # console série 115200 (optionnel)
 ## Protocole WebSocket (/ws)
 
 Client → serveur : `{"cmd":"toggle","i":4}` · `{"cmd":"relay","i":4,"on":true}` ·
-`{"cmd":"pulse","i":2}` · `{"cmd":"game","running":true}` · `{"cmd":"snapshot"}`
+`{"cmd":"pulse","i":2}` · `{"cmd":"seq","i":0}` · `{"cmd":"game","running":true}` · `{"cmd":"snapshot"}`
 
-Serveur → client : `snapshot` (état complet à la connexion) puis les deltas
+Serveur → client : `snapshot` (état complet, dont la liste des scènes) puis les deltas
 `relay` / `input` / `net` / `game` / `hb` / `log`.
+
+## Scènes (Étape 6)
+
+Une scène = un état **instantané** multi-relais (« Reset », « Ouverture », « Nettoyage »).
+Définies dans `config.json` (`sequences[]`), déclenchées via le bus (`SEQUENCE_RUN`) :
+dashboard (boutons « Scènes »), console série (`q<n>`), et à venir le joystick.
+
+```json
+"sequences": [
+  { "id":1, "name":"Reset", "enabled":true,
+    "steps":[ {"relay":0,"action":2}, {"relay":2,"action":1} ] }
+]
+```
+`action` : 0=TOGGLE, 1=ON, 2=OFF, 3=PULSE. Tous les pas sont appliqués d'un bloc,
+via le `RelayManager` (jamais de pilotage direct). Les timelines temporisées = Étape 7.
 
 ## Prochaine étape
 
-**Étape 6 : SequenceEngine** — états instantanés multi-relais (« Nettoyage »,
-« Reset », « Ouverture ») déclenchables depuis le dashboard et le joystick.
+**Étape 7 : AnimationEngine** — timelines NON bloquantes (pas échelonnés dans le temps,
+ex. clignotements, ouvertures séquencées) au-dessus du même bus.

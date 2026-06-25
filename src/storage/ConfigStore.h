@@ -6,6 +6,7 @@
 #include "io/RelayManager.h"
 #include "io/InputManager.h"
 #include "core/AutomationEngine.h"
+#include "core/SequenceEngine.h"
 #include "Config.h"
 // ============================================================
 //  ConfigStore — persistance JSON sur LittleFS.
@@ -88,6 +89,21 @@ public:
       au.relayIndex = a["relay"] | 0;
       Autos().add(au);
     }
+
+    // --- séquences / scènes multi-relais (Étape 6) ---
+    Seq().clear();
+    for (JsonObject s : doc["sequences"].as<JsonArray>()) {
+      Sequence seq;
+      strlcpy(seq.name, s["name"] | "Sequence", sizeof(seq.name));
+      seq.enabled = s["enabled"] | true;
+      for (JsonObject st : s["steps"].as<JsonArray>()) {
+        SeqStep step;
+        step.relayIndex = st["relay"]  | 0;
+        step.action     = (ActionKind)(st["action"] | 0);
+        seq.steps.push_back(step);
+      }
+      Seq().add(seq);
+    }
     Serial.printf("[cfg] loaded (v%d)\n", v);
     return true;
   }
@@ -134,6 +150,22 @@ public:
       o["input"]  = a.inputIndex;
       o["action"] = (int)a.action;
       o["relay"]  = a.relayIndex;
+    }
+
+    JsonArray seqs = doc["sequences"].to<JsonArray>();
+    uint8_t si = 0;
+    for (auto& s : Seq().list()) {
+      JsonObject o = seqs.add<JsonObject>();
+      o["id"]      = si + 1;
+      o["name"]    = s.name;
+      o["enabled"] = s.enabled;
+      JsonArray steps = o["steps"].to<JsonArray>();
+      for (auto& st : s.steps) {
+        JsonObject so = steps.add<JsonObject>();
+        so["relay"]  = st.relayIndex;
+        so["action"] = (int)st.action;
+      }
+      si++;
     }
 
     File f = LittleFS.open(CONFIG_PATH, "w");

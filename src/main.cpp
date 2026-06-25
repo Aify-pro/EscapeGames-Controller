@@ -4,6 +4,7 @@
 #include "core/EventBus.h"
 #include "core/StateManager.h"
 #include "core/AutomationEngine.h"
+#include "core/SequenceEngine.h"
 #include "net/NetworkManager.h"
 #include "io/RelayManager.h"
 #include "io/InputManager.h"
@@ -11,13 +12,14 @@
 #include "storage/ConfigStore.h"
 // ============================================================
 //  Escape Game Central Controller — main
-//  ÉTAPES 1-5 : coeur événementiel + relais + inputs + réseau
-//               + config + web temps réel + OTA-ready
+//  ÉTAPES 1-6 : coeur événementiel + relais + inputs + réseau
+//               + config + web temps réel + scènes + OTA-ready
 //  HW : MCP23017 (I2C 33/32, adresses 0x27/0x26/0x25).
 //
 //  Console série de test (115200 baud) :
 //    r<n>      -> toggle relais n   (ex: r5)
 //    p<n>      -> impulsion relais n
+//    q<n>      -> déclenche la scène n (ex: q1 = 1ère séquence)
 //    s         -> dump états
 //    save      -> sauvegarde config
 // ============================================================
@@ -64,6 +66,9 @@ static void consoleTask(void*) {
           int n = line.substring(1).toInt() - 1;
           Relays().cfg(n).type = RelayType::MOMENTARY;
           Relays().command(n, true);
+        } else if (line.startsWith("q")) {
+          int n = line.substring(1).toInt() - 1;   // 1-based comme r/p
+          Seq().trigger(n);
         } else if (line == "s") {
           for (uint8_t i = 0; i < RELAY_COUNT; i++)
             if (State().relay(i)) Serial.printf("  R%d ON (%s)\n", i + 1, Relays().cfg(i).name);
@@ -86,14 +91,17 @@ void setup() {
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
   Wire.setClock(400000);
 
-  Bus().begin();          // 1. coeur événementiel d'abord
+  // File d'événements à 64 : une scène multi-relais publie en rafale
+  // jusqu'à 32 RELAY_CHANGED d'un coup -> marge pour ne rien perdre.
+  Bus().begin(64);       // 1. coeur événementiel d'abord
   setupLogger();          // 2. logs
-  Cfg().begin();          // 3. charge config (réseau + relais + inputs + automations)
+  Cfg().begin();          // 3. charge config (réseau + relais + inputs + automations + scènes)
   Net().begin();          // 4. Ethernet prioritaire / WiFi secours
   Relays().begin();       // 5. MCP23017 sorties (0x27/0x26) + états sûrs au boot
   Autos().begin();        // 6. moteur event->action (s'abonne au bus)
-  Inputs().begin();       // 7. lecture des 16 entrées (MCP23017 0x25)
-  Web().begin();          // 8. serveur web + WebSocket temps réel
+  Seq().begin();          // 7. moteur de scènes (écoute SEQUENCE_RUN)
+  Inputs().begin();       // 8. lecture des 16 entrées (MCP23017 0x25)
+  Web().begin();          // 9. serveur web + WebSocket temps réel
 
   xTaskCreatePinnedToCore(heartbeatTask, "hb",   3072, nullptr, 2, nullptr, 1);
   xTaskCreatePinnedToCore(consoleTask,   "cons", 3072, nullptr, 2, nullptr, 1);
