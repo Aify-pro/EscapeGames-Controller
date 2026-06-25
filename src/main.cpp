@@ -11,7 +11,9 @@
 #include "storage/ConfigStore.h"
 // ============================================================
 //  Escape Game Central Controller — main
-//  ÉTAPE 1 : coeur événementiel + relais + réseau + config + OTA-ready
+//  ÉTAPES 1-5 : coeur événementiel + relais + inputs + réseau
+//               + config + web temps réel + OTA-ready
+//  HW : MCP23017 (I2C 33/32, adresses 0x27/0x26/0x25).
 //
 //  Console série de test (115200 baud) :
 //    r<n>      -> toggle relais n   (ex: r5)
@@ -80,7 +82,7 @@ void setup() {
   delay(300);
   Serial.printf("\n=== Escape CTRL  fw %s ===\n", FW_VERSION);
 
-  // Bus I2C (OLED + PCF8575)
+  // Bus I2C (OLED + 3x MCP23017). Pins 33/32 obligatoires avec ETH actif.
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
   Wire.setClock(400000);
 
@@ -88,9 +90,9 @@ void setup() {
   setupLogger();          // 2. logs
   Cfg().begin();          // 3. charge config (réseau + relais + inputs + automations)
   Net().begin();          // 4. Ethernet prioritaire / WiFi secours
-  Relays().begin();       // 5. PCF8575 sorties + états sûrs au boot
+  Relays().begin();       // 5. MCP23017 sorties (0x27/0x26) + états sûrs au boot
   Autos().begin();        // 6. moteur event->action (s'abonne au bus)
-  Inputs().begin();       // 7. lecture des 16 entrées (PCF8575 0x22)
+  Inputs().begin();       // 7. lecture des 16 entrées (MCP23017 0x25)
   Web().begin();          // 8. serveur web + WebSocket temps réel
 
   xTaskCreatePinnedToCore(heartbeatTask, "hb",   3072, nullptr, 2, nullptr, 1);

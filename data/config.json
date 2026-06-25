@@ -1,6 +1,6 @@
 {
   "config_version": 1,
-  "fw_version": "0.5.0",
+  "fw_version": "0.5.1",
   "net": {
     "ip": "192.168.1.50",
     "gw": "192.168.1.1",

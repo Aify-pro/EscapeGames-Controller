@@ -2,24 +2,31 @@
 // ============================================================
 //  Config.h — mapping GPIO + constantes matérielles
 //  Cible : ESP32 WT32-ETH01 (LAN8720 RMII)
+//
+//  ⚠️ Valeurs CONFIRMÉES par scan/test physique (cf. CONTEXTE §2).
+//     L'ancienne Config.h (I2C 14/15, adresses 0x20/21/22) était
+//     fausse pour ce montage. NE PAS y revenir.
 // ============================================================
 
-// ---- I2C (bus partagé : OLED + 3x PCF8575) ----
-// IO14/IO15 choisis car libres et sans conflit ETH.
-// IO12 INTERDIT (strapping flash 1.8V -> boot fail si tiré haut).
-static constexpr int PIN_I2C_SDA = 14;
-static constexpr int PIN_I2C_SCL = 15;
+// ---- I2C (bus partagé : OLED + 3x MCP23017) ----
+// Sur le WT32-ETH01 avec Ethernet ACTIF, seuls GPIO32/33 marchent
+// pour le I2C (contrainte hardware de la carte, pas un choix soft).
+static constexpr int PIN_I2C_SDA = 33;
+static constexpr int PIN_I2C_SCL = 32;
 
 // ---- Joystick HW-504 ----
-// VRx/VRy doivent être sur ADC1 (ADC2 inutilisable avec le réseau actif).
-static constexpr int PIN_JOY_X  = 35;  // ADC1, input-only
+// VRx/VRy sur ADC1 (ADC2 inutilisable avec le réseau actif).
+static constexpr int PIN_JOY_X  = 36;  // ADC1, input-only
 static constexpr int PIN_JOY_Y  = 39;  // ADC1, input-only
-static constexpr int PIN_JOY_SW = 5;   // pull-up interne dispo
+// SW sur IO35 (remplace IO12 = strapping flash, instable à l'appui).
+// ⚠️ IO35 est input-only et SANS pull-up interne -> prévoir un
+//    pull-up EXTERNE (10k vers 3.3V) au câblage du bouton (Étape 8).
+static constexpr int PIN_JOY_SW = 35;
 
-// ---- Adresses I2C ----
-static constexpr uint8_t I2C_RELAY_BANK_0 = 0x20; // relais 1..16
-static constexpr uint8_t I2C_RELAY_BANK_1 = 0x21; // relais 17..32
-static constexpr uint8_t I2C_INPUT_BANK   = 0x22; // entrées 1..16
+// ---- Adresses I2C MCP23017 (Soldered, confirmées par scan) ----
+static constexpr uint8_t I2C_RELAY_BANK_0 = 0x27; // relais 1..16  (aucun jumper)
+static constexpr uint8_t I2C_RELAY_BANK_1 = 0x26; // relais 17..32 (JP5 -> GND)
+static constexpr uint8_t I2C_INPUT_BANK   = 0x25; // entrées 1..16 (JP6 -> GND)
 static constexpr uint8_t I2C_OLED         = 0x3C; // SSD1306 0.96"
 
 // ---- Capacités ----

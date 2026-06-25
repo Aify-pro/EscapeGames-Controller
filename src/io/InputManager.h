@@ -2,18 +2,20 @@
 #include <Arduino.h>
 #include "core/EventBus.h"
 #include "core/StateManager.h"
-#include "hw/Pcf8575.h"
+#include "hw/Mcp23017.h"
 #include "Config.h"
 // ============================================================
-//  InputManager — ÉTAPE 2. Lit les 16 entrées (PCF8575 0x22),
+//  InputManager — ÉTAPE 2. Lit les 16 entrées (MCP23017 0x25),
 //  applique debounce + logique NO/NC, et n'émet QUE des
 //  événements (INPUT_TRIGGERED / INPUT_RELEASED). Il ne pilote
 //  jamais un relais directement (c'est le rôle de l'Automation).
 //
-//  Câblage : capteur entre la pin et GND. Pull-up faible interne
-//  du PCF8575 -> ligne au repos = HIGH.
+//  Câblage : capteur entre la pin et GND. Pull-up interne du
+//  MCP23017 (pinMode INPUT_PULLUP) -> ligne au repos = HIGH.
 //    NO (normalement ouvert) : actif quand la ligne passe LOW
 //    NC (normalement fermé)   : actif quand la ligne passe HIGH
+//  Pas de mapping port B/A ici : la banque d'entrées est câblée
+//  en direct (read16() lit GPIOA=bits0..7, GPIOB=bits8..15).
 // ============================================================
 
 enum class InputMode : uint8_t { NO, NC };
@@ -30,7 +32,7 @@ public:
   static InputManager& get() { static InputManager m; return m; }
 
   void begin() {
-    _bank.begin();   // 0x22, reste à 0xFFFF -> mode entrée
+    _bank.begin();   // 0x25, pins en INPUT_PULLUP -> repos = HIGH
     for (uint8_t i = 0; i < INPUT_COUNT; i++) _lastRaw[i] = true; // repos = HIGH
     xTaskCreatePinnedToCore(_taskTrampoline, "input", 3072, this, 4, nullptr, 1);
   }
@@ -38,9 +40,10 @@ public:
   InputCfg& cfg(uint8_t i) { return _cfg[i]; }
 
 private:
-  InputManager() : _bank(I2C_INPUT_BANK) {}
+  // Banque entrées : INPUT_PULLUP (outputs=false), pas de swap.
+  InputManager() : _bank(I2C_INPUT_BANK, false, false) {}
 
-  Pcf8575  _bank;
+  Mcp23017 _bank;
   InputCfg _cfg[INPUT_COUNT];
   bool     _stable[INPUT_COUNT]  = {false};   // état logique stable (actif/inactif)
   bool     _lastRaw[INPUT_COUNT] = {true};    // dernière lecture brute (HIGH au repos)
